@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const { requireAuth, requireAdmin } = require("../middleware/auth");
-const { createClient, listClients } = require("../controllers/admin.clients.controller");
+const { createClient, listClients } = require("../controller/admin.clients.controller");
 
 // tudo aqui precisa estar logado e ser ADMIN
 router.use(requireAuth, requireAdmin);
