@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { createTransaction, listTransactions } = require("../controllers/admin.transactions.controller");
+const { createTransaction, listTransactions } = require("../controller/admin.transactions.controller");
 
 router.get("/", listTransactions);
 router.post("/", createTransaction);
