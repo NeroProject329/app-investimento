@@ -3,11 +3,16 @@
    "version": "1.0.0",
    "main": "src/server.js",
    "scripts": {
-      "dev": "nodemon src/server.js",
-      "start": "node src/server.js",
-      "prisma:generate": "prisma generate",
-      "prisma:migrate": "prisma migrate dev"
-   },
+  "dev": "nodemon src/server.js",
+  "start": "node src/server.js",
+
+  "postinstall": "prisma generate",
+  "prestart": "prisma migrate deploy",
+
+  "migrate:dev": "prisma migrate dev",
+  "migrate:deploy": "prisma migrate deploy",
+  "seed": "node prisma/seed.js"
+},
    "keywords": [],
    "author": "",
    "license": "ISC",
