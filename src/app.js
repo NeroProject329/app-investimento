@@ -4,6 +4,8 @@ const cookieParser = require("cookie-parser");
 
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
+const adminRoutes = require("./routes/admin.routes");
+
 
 const app = express();
 
@@ -24,6 +26,7 @@ app.use(
 // Rotas
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 
 
 module.exports = { app };

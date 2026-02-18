@@ -55,20 +55,16 @@ model Client {
 }
 
 model Portfolio {
-  id               String @id @default(cuid())
-  clientId         String @unique
-  cashInvestmentId String @unique
+  id               String      @id @default(cuid())
+  clientId         String      @unique
 
-  client Client @relation(fields: [clientId], references: [id])
+  cashInvestmentId String?     @unique
+  cashInvestment   Investment? @relation("CashInvestment", fields: [cashInvestmentId], references: [id])
 
-  // 👇 nomeia a relação "normal" (Portfolio -> Investments)
-  investments Investment[] @relation("PortfolioInvestments")
-
-  groups       InvestmentGroup[]
-  transactions Transaction[]
-
-  // 👇 relação separada (Portfolio -> cashInvestment)
-  cashInvestment Investment @relation("CashInvestment", fields: [cashInvestmentId], references: [id])
+  client           Client      @relation(fields: [clientId], references: [id])
+  investments      Investment[]
+  groups           InvestmentGroup[]
+  transactions     Transaction[]
 }
 
 model InvestmentGroup {
@@ -83,27 +79,26 @@ model InvestmentGroup {
 }
 
 model Investment {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   portfolioId String
   groupId     String?
   name        String
-  isCash      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  isCash      Boolean           @default(false)
+  createdAt   DateTime          @default(now())
 
-  // 👇 lado oposto da relação "normal"
-  portfolio Portfolio @relation("PortfolioInvestments", fields: [portfolioId], references: [id])
+  portfolio   Portfolio         @relation(fields: [portfolioId], references: [id])
+  group       InvestmentGroup?  @relation(fields: [groupId], references: [id])
 
-  group InvestmentGroup? @relation(fields: [groupId], references: [id])
+  // 👇 ADICIONE ISSO
+  cashForPortfolio Portfolio?   @relation("CashInvestment")
 
-  // 👇 lado oposto da relação "CashInvestment" (OBRIGATÓRIO existir)
-  cashForPortfolio Portfolio? @relation("CashInvestment")
-
-  txInvestment Transaction[] @relation("TxInvestment")
-  txFrom       Transaction[] @relation("TxFrom")
-  txTo         Transaction[] @relation("TxTo")
+  txInvestment Transaction[]    @relation("TxInvestment")
+  txFrom       Transaction[]    @relation("TxFrom")
+  txTo         Transaction[]    @relation("TxTo")
 
   @@index([portfolioId])
 }
+
 
 model Transaction {
   id          String   @id @default(cuid())
