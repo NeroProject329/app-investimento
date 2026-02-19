@@ -15,10 +15,10 @@ app.use(express.json());
 // Cookies
 app.use(cookieParser());
 
-// CORS (ajustaremos depois quando conectar no Next)
+// CORS (por enquanto ok assim; quando tiver front, a gente trava por domínio)
 app.use(
   cors({
-    origin: true, // depois vamos travar isso pro domínio do front
+    origin: true,
     credentials: true,
   })
 );
@@ -28,5 +28,11 @@ app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/client", clientRoutes);
+
+// (Opcional) handler de erro padrão (ajuda muito)
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ ok: false, message: "Erro interno" });
+});
 
 module.exports = { app };

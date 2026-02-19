@@ -1,5 +1,7 @@
 const { z } = require("zod");
 const { prisma } = require("../lib/prisma");
+const { getInvestmentBalanceCents } = require("../services/balance.service");
+
 
 const createTxSchema = z.object({
   type: z.enum(["DEPOSIT", "WITHDRAW", "TRANSFER", "GAIN", "LOSS", "ADJUST"]),
@@ -64,22 +66,49 @@ async function createTransaction(req, res) {
     const note = data.note ? String(data.note) : null;
 
     // Regras por tipo
-    if (data.type === "DEPOSIT" || data.type === "WITHDRAW") {
-      // Sempre no CAIXA
-      const tx = await prisma.transaction.create({
-        data: {
-          portfolioId: portfolio.id,
-          type: data.type,
-          amountCents: data.amountCents,
-          occurredAt,
-          note,
-          investmentId: portfolio.cashInvestmentId,
-        },
-        select: { id: true, type: true, amountCents: true, occurredAt: true, investmentId: true },
-      });
+    if (data.type === "DEPOSIT") {
+  const tx = await prisma.transaction.create({
+    data: {
+      portfolioId: portfolio.id,
+      type: "DEPOSIT",
+      amountCents: data.amountCents,
+      occurredAt,
+      note,
+      investmentId: portfolio.cashInvestmentId,
+    },
+    select: { id: true, type: true, amountCents: true, occurredAt: true, investmentId: true },
+  });
 
-      return res.status(201).json({ ok: true, tx });
-    }
+  return res.status(201).json({ ok: true, tx });
+}
+
+if (data.type === "WITHDRAW") {
+  // valida saldo do CAIXA
+  const cashBal = await getInvestmentBalanceCents(portfolio.id, portfolio.cashInvestmentId);
+
+  if (data.amountCents > cashBal) {
+    return res.status(400).json({
+      ok: false,
+      code: "INSUFFICIENT_CASH",
+      message: "Saldo insuficiente no CAIXA para saque.",
+      cashBalanceCents: cashBal,
+    });
+  }
+
+  const tx = await prisma.transaction.create({
+    data: {
+      portfolioId: portfolio.id,
+      type: "WITHDRAW",
+      amountCents: data.amountCents,
+      occurredAt,
+      note,
+      investmentId: portfolio.cashInvestmentId,
+    },
+    select: { id: true, type: true, amountCents: true, occurredAt: true, investmentId: true },
+  });
+
+  return res.status(201).json({ ok: true, tx });
+}
 
     if (data.type === "TRANSFER") {
       if (!data.fromInvestmentId || !data.toInvestmentId) {
@@ -91,6 +120,18 @@ async function createTransaction(req, res) {
 
       await ensureInvestmentBelongs(data.fromInvestmentId, portfolio.id);
       await ensureInvestmentBelongs(data.toInvestmentId, portfolio.id);
+
+      const fromBal = await getInvestmentBalanceCents(portfolio.id, data.fromInvestmentId);
+
+if (data.amountCents > fromBal) {
+  return res.status(400).json({
+    ok: false,
+    code: "INSUFFICIENT_FUNDS",
+    message: "Saldo insuficiente no investimento de origem para transferir.",
+    fromBalanceCents: fromBal,
+  });
+}
+
 
       const tx = await prisma.transaction.create({
         data: {
@@ -117,6 +158,19 @@ async function createTransaction(req, res) {
     }
 
     await ensureInvestmentBelongs(data.investmentId, portfolio.id);
+
+    if (data.type === "LOSS") {
+  const invBal = await getInvestmentBalanceCents(portfolio.id, data.investmentId);
+  if (data.amountCents > invBal) {
+    return res.status(400).json({
+      ok: false,
+      code: "INSUFFICIENT_BALANCE_FOR_LOSS",
+      message: "Essa perda deixaria o investimento com saldo negativo.",
+      investmentBalanceCents: invBal,
+    });
+  }
+}
+
 
     const tx = await prisma.transaction.create({
       data: {
