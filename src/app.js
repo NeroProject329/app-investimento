@@ -5,7 +5,7 @@ const cookieParser = require("cookie-parser");
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
-
+const clientRoutes = require("./routes/client.routes");
 
 const app = express();
 
@@ -27,6 +27,6 @@ app.use(
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
-
+app.use("/api/client", clientRoutes);
 
 module.exports = { app };
