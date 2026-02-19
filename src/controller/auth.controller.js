@@ -14,18 +14,17 @@ const changePasswordSchema = z.object({
 });
 
 function cookieOptions() {
-  // Em dev/local: secure false funciona no http://localhost
-  // Em produção (https): secure true
   const isProd = process.env.NODE_ENV === "production";
 
   return {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: isProd ? "none" : "lax",
     secure: isProd,
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 }
+
 
 async function login(req, res) {
   const parsed = loginSchema.safeParse(req.body);
