@@ -39,8 +39,13 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  client Client?
+  client             Client?
+
+  // ✅ NOVO
+  auditLogs          AuditLog[]
+  createdTransactions Transaction[] @relation("TxCreatedBy")
 }
+
 
 model Client {
   id       String          @id @default(cuid())
@@ -101,22 +106,47 @@ model Investment {
 
 
 model Transaction {
-  id          String   @id @default(cuid())
-  portfolioId String
-  type        TxType
-  amountCents Int
-  occurredAt  DateTime
-  note        String?
+  id              String   @id @default(cuid())
+  portfolioId     String
+  type            TxType
+  amountCents     Int
+  occurredAt      DateTime
+  note            String?
 
   investmentId     String?
   fromInvestmentId String?
   toInvestmentId   String?
 
-  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+  // ✅ NOVO (quem lançou)
+  createdByUserId String?
+  createdBy       User? @relation("TxCreatedBy", fields: [createdByUserId], references: [id])
 
-  investment Investment? @relation("TxInvestment", fields: [investmentId], references: [id])
-  fromInv    Investment? @relation("TxFrom", fields: [fromInvestmentId], references: [id])
-  toInv      Investment? @relation("TxTo", fields: [toInvestmentId], references: [id])
+  portfolio       Portfolio @relation(fields: [portfolioId], references: [id])
+
+  investment      Investment? @relation("TxInvestment", fields: [investmentId], references: [id])
+  fromInv         Investment? @relation("TxFrom", fields: [fromInvestmentId], references: [id])
+  toInv           Investment? @relation("TxTo", fields: [toInvestmentId], references: [id])
 
   @@index([portfolioId, occurredAt])
 }
+
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actorUser   User?    @relation(fields: [actorUserId], references: [id])
+
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+
+  ip          String?
+  userAgent   String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+}
+

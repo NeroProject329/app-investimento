@@ -5,6 +5,8 @@ const { forceChangePassword } = require("../middleware/forceChangePassword");
 // clientes
 const { createClient, listClients } = require("../controller/admin.clients.controller");
 const { getClientDashboard } = require("../controller/admin.dashboard.controller");
+const { getMetrics } = require("../controller/admin.metrics.controller");
+
 
 // sub-rotas
 const groupsRoutes = require("./admin.groups.routes");
@@ -22,5 +24,7 @@ router.get("/clients/:clientId/dashboard", getClientDashboard);
 router.use("/clients/:clientId/groups", groupsRoutes);
 router.use("/clients/:clientId/investments", investmentsRoutes);
 router.use("/clients/:clientId/transactions", transactionsRoutes);
+
+router.get("/metrics", getMetrics);
 
 module.exports = router;
