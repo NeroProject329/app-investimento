@@ -135,33 +135,101 @@ async function createTransaction(req, res) {
     return res.status(err.statusCode || 500).json({ ok: false, message: err.message || "Erro interno" });
   }
 }
+const { z } = require("zod");
+const { prisma } = require("../lib/prisma");
+
+const querySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+
+  type: z.enum(["DEPOSIT", "WITHDRAW", "TRANSFER", "GAIN", "LOSS", "ADJUST"]).optional(),
+  investmentId: z.string().optional(),
+
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+
+function monthToRange(monthStr) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m, 1, 0, 0, 0));
+  return { start, end };
+}
 
 async function listTransactions(req, res) {
   const clientId = req.params.clientId;
 
-  try {
-    const portfolio = await getPortfolioOrThrow(clientId);
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, message: "Query inválida", errors: parsed.error.flatten() });
+  }
 
-    const txs = await prisma.transaction.findMany({
-      where: { portfolioId: portfolio.id },
+  const { page, limit, type, investmentId, month, from, to } = parsed.data;
+
+  const portfolio = await prisma.portfolio.findUnique({
+    where: { clientId },
+    select: { id: true },
+  });
+  if (!portfolio) return res.status(404).json({ ok: false, message: "Portfolio não encontrado para este cliente" });
+
+  const where = { portfolioId: portfolio.id };
+
+  if (type) where.type = type;
+
+  if (investmentId) {
+    where.OR = [
+      { investmentId },
+      { fromInvestmentId: investmentId },
+      { toInvestmentId: investmentId },
+    ];
+  }
+
+  if (month) {
+    const { start, end } = monthToRange(month);
+    where.occurredAt = { gte: start, lt: end };
+  } else if (from || to) {
+    where.occurredAt = {};
+    if (from) where.occurredAt.gte = new Date(from);
+    if (to) where.occurredAt.lte = new Date(to);
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [total, transactions] = await Promise.all([
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
       orderBy: { occurredAt: "desc" },
-      take: 200,
+      skip,
+      take: limit,
       select: {
         id: true,
         type: true,
         amountCents: true,
         occurredAt: true,
         note: true,
+
         investmentId: true,
         fromInvestmentId: true,
         toInvestmentId: true,
-      },
-    });
 
-    return res.json({ ok: true, transactions: txs });
-  } catch (err) {
-    return res.status(err.statusCode || 500).json({ ok: false, message: err.message || "Erro interno" });
-  }
+        investment: { select: { id: true, name: true } },
+        fromInv: { select: { id: true, name: true } },
+        toInv: { select: { id: true, name: true } },
+      },
+    }),
+  ]);
+
+  return res.json({
+    ok: true,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+    transactions,
+  });
 }
+
 
 module.exports = { createTransaction, listTransactions };
