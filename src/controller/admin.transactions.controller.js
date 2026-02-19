@@ -135,8 +135,7 @@ async function createTransaction(req, res) {
     return res.status(err.statusCode || 500).json({ ok: false, message: err.message || "Erro interno" });
   }
 }
-const { z } = require("zod");
-const { prisma } = require("../lib/prisma");
+
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
