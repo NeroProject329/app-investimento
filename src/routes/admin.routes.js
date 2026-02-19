@@ -12,8 +12,11 @@ const { getMetrics } = require("../controller/admin.metrics.controller");
 const groupsRoutes = require("./admin.groups.routes");
 const investmentsRoutes = require("./admin.investments.routes");
 const transactionsRoutes = require("./admin.transactions.routes");
+const exportsRoutes = require("./admin.exports.routes");
 
 router.use(requireAuth, requireAdmin, forceChangePassword);
+router.use("/clients/:clientId/exports", exportsRoutes);
+
 
 router.get("/clients", listClients);
 router.post("/clients", createClient);
