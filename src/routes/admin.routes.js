@@ -9,7 +9,7 @@ const { getMetrics } = require("../controller/admin.metrics.controller");
 
 
 // sub-rotas
-const groupsRoutes = require("./admin.groups.routes");
+const groupsRoutes = require("./admin.groups.global.routes");
 const investmentsRoutes = require("./admin.investments.routes");
 const transactionsRoutes = require("./admin.transactions.routes");
 const exportsRoutes = require("./admin.exports.routes");
