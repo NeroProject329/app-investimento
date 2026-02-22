@@ -16,11 +16,13 @@ const exportsRoutes = require("./admin.exports.routes");
 const globalGroupsRoutes = require("./admin.groups.global.routes");
 const adminGlobalTransactionsRoutes = require("./admin.transactions.global.routes");
 const adminGlobalInvestmentsRoutes = require("./admin.investments.global.routes");
+const adminDashboardGlobalRoutes = require("./admin.dashboard.global.routes");
 
 
 router.use(requireAuth, requireAdmin, forceChangePassword);
 router.use("/transactions", adminGlobalTransactionsRoutes);
 router.use("/investments", adminGlobalInvestmentsRoutes);
+router.use("/dashboard", adminDashboardGlobalRoutes);
 router.use("/clients/:clientId/exports", exportsRoutes);
 
 
