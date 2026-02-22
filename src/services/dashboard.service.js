@@ -197,16 +197,29 @@ async function buildDashboardByPortfolioId(portfolioId) {
   const cashCents = balance.get(portfolio.cashInvestmentId) || 0;
 
   // 6) Baseline inicial (primeiro ponto da série mensal)
-  const initialCents = monthly[0]?.totalCents || 0;
+ // 6) Baseline inicial (mantém — útil pra debug/series)
+const initialCents = monthly[0]?.totalCents || 0;
 
-  const totalReturnPct = initialCents > 0
-    ? Number((((portfolioCents - initialCents) / initialCents) * 100).toFixed(2))
-    : 0;
+// ✅ Capital aportado (DEPOSIT - WITHDRAW)
+let contributedCents = 0;
+for (const tx of transactions) {
+  const t = String(tx.type || "").toUpperCase();
+  if (t === "DEPOSIT") contributedCents += tx.amountCents;
+  if (t === "WITHDRAW") contributedCents -= tx.amountCents;
+}
 
-  // mensal: compara mês atual vs mês anterior (fim do mês anterior)
-  const monthlyReturnPct = monthly.length >= 2 && monthly[monthly.length - 2].totalCents > 0
-    ? Number((((portfolioCents - monthly[monthly.length - 2].totalCents) / monthly[monthly.length - 2].totalCents) * 100).toFixed(2))
-    : 0;
+// ✅ Lucro = AUM - capital aportado
+const profitCents = portfolioCents - contributedCents;
+
+// ✅ Retorno total (%): lucro / capital aportado
+const totalReturnPct = contributedCents > 0
+  ? Number(((profitCents / contributedCents) * 100).toFixed(2))
+  : 0;
+
+// mensal: compara mês atual vs mês anterior (fim do mês anterior)
+const monthlyReturnPct = monthly.length >= 2 && monthly[monthly.length - 2].totalCents > 0
+  ? Number((((portfolioCents - monthly[monthly.length - 2].totalCents) / monthly[monthly.length - 2].totalCents) * 100).toFixed(2))
+  : 0;
 
   // 7) Alocação por investimento (saldo / total)
   const byInvestment = investments.map((inv) => {

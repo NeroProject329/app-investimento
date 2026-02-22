@@ -294,7 +294,37 @@ async function getAdminDashboardGlobal(req, res) {
       };
     });
 
+
     const monthly = monthlyAll.slice(-monthsWanted);
+
+    // ✅ capital aportado global (DEPOSIT - WITHDRAW)
+const contribRows = await prisma.transaction.groupBy({
+  by: ["type"],
+  where: {
+    portfolioId: { in: portfolioIds },
+    type: { in: ["DEPOSIT", "WITHDRAW"] },
+  },
+  _sum: { amountCents: true },
+});
+
+let contributedCents = 0;
+for (const row of contribRows) {
+  const amt = row._sum.amountCents || 0;
+  if (row.type === "DEPOSIT") contributedCents += amt;
+  if (row.type === "WITHDRAW") contributedCents -= amt;
+}
+
+const profitCents = totals.aumCents - contributedCents;
+
+const totalReturnPct = contributedCents > 0
+  ? Number(((profitCents / contributedCents) * 100).toFixed(2))
+  : 0;
+
+// mensal: compara AUM atual vs fim do mês anterior
+const prevTotal = monthlyAll.length >= 2 ? (monthlyAll[monthlyAll.length - 2].totalCents || 0) : 0;
+const monthlyReturnPct = prevTotal > 0
+  ? Number((((totals.aumCents - prevTotal) / prevTotal) * 100).toFixed(2))
+  : 0;
 
     // 6) Alocação por grupo (saldo atual)
     // Vamos calcular saldo por investimento (diretas + transfers) e agregar por group/cash.
@@ -482,6 +512,8 @@ async function getAdminDashboardGlobal(req, res) {
       latestTransactions,
       topInvestments,
       topClients,
+      totalReturnPct,
+      monthlyReturnPct,
     });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err?.message || "Erro interno" });
