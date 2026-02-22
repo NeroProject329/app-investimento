@@ -14,8 +14,11 @@ const investmentsRoutes = require("./admin.investments.routes");
 const transactionsRoutes = require("./admin.transactions.routes");
 const exportsRoutes = require("./admin.exports.routes");
 const globalGroupsRoutes = require("./admin.groups.global.routes");
+const adminGlobalTransactionsRoutes = require("./admin.transactions.global.routes");
+
 
 router.use(requireAuth, requireAdmin, forceChangePassword);
+router.use("/transactions", adminGlobalTransactionsRoutes);
 router.use("/clients/:clientId/exports", exportsRoutes);
 
 
