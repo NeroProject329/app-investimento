@@ -1,118 +1,141 @@
+const { z } = require("zod");
 const { prisma } = require("../lib/prisma");
 
-function toInt(v, d) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : d;
-}
+const querySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 
-function monthRange(yyyyMM) {
-  // yyyy-MM
-  const [y, m] = String(yyyyMM || "").split("-").map(Number);
-  if (!y || !m) return null;
+  clientId: z.string().optional(),
+  type: z.enum(["DEPOSIT", "WITHDRAW", "TRANSFER", "GAIN", "LOSS", "ADJUST"]).optional(),
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(), // YYYY-MM
+});
+
+function monthToRange(monthStr) {
+  const [y, m] = monthStr.split("-").map(Number);
   const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
   const end = new Date(Date.UTC(y, m, 1, 0, 0, 0));
   return { start, end };
 }
 
 async function listAdminTransactionsGlobal(req, res) {
-  try {
-    const page = Math.max(1, toInt(req.query.page, 1));
-    const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 50)));
-    const skip = (page - 1) * limit;
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      message: "Query inválida",
+      errors: parsed.error.flatten(),
+    });
+  }
 
-    const clientId = req.query.clientId ? String(req.query.clientId) : null;
-    const type = req.query.type ? String(req.query.type).toUpperCase() : null;
-    const month = req.query.month ? String(req.query.month) : null;
+  const { page, limit, clientId, type, month } = parsed.data;
+  const skip = (page - 1) * limit;
 
-    const where = {};
+  const where = {};
 
-    if (type) where.type = type;
+  if (type) where.type = type;
 
-    if (clientId) {
-      where.portfolio = { clientId };
+  // ✅ filtro por client -> resolve via portfolioId (mais seguro e rápido)
+  if (clientId) {
+    const portfolio = await prisma.portfolio.findUnique({
+      where: { clientId },
+      select: { id: true },
+    });
+
+    if (!portfolio) {
+      return res.json({
+        ok: true,
+        page,
+        limit,
+        total: 0,
+        totalPages: 1,
+        transactions: [],
+      });
     }
 
-    if (month) {
-      const r = monthRange(month);
-      if (!r) {
-        return res.status(400).json({ ok: false, message: "month inválido. Use YYYY-MM" });
-      }
-      where.occurredAt = { gte: r.start, lt: r.end };
-    }
+    where.portfolioId = portfolio.id;
+  }
 
-    const [total, transactions] = await prisma.$transaction([
-      prisma.transaction.count({ where }),
-      prisma.transaction.findMany({
-        where,
-        orderBy: { occurredAt: "desc" },
-        skip,
-        take: limit,
-        include: {
-          // cliente vem via portfolio
-          portfolio: {
-            select: {
-              client: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  user: { select: { email: true } },
-                },
+  if (month) {
+    const { start, end } = monthToRange(month);
+    where.occurredAt = { gte: start, lt: end };
+  }
+
+  const [total, transactions] = await Promise.all([
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
+      orderBy: { occurredAt: "desc" },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        amountCents: true,
+        occurredAt: true,
+        note: true,
+
+        investmentId: true,
+        fromInvestmentId: true,
+        toInvestmentId: true,
+
+        investment: { select: { id: true, name: true } },
+        fromInv: { select: { id: true, name: true } },
+        toInv: { select: { id: true, name: true } },
+
+        // ✅ createdBy NÃO tem name no schema atual
+        createdByUserId: true,
+        createdBy: { select: { id: true, email: true } },
+
+        // ✅ pegar o cliente via portfolio
+        portfolio: {
+          select: {
+            client: {
+              select: {
+                id: true,
+                fullName: true,
+                user: { select: { email: true } },
               },
             },
           },
-
-          // investimentos hidratados (igual você já tem no extrato do cliente)
-          investment: { select: { id: true, name: true } },
-          fromInv: { select: { id: true, name: true } },
-          toInv: { select: { id: true, name: true } },
-
-          // auditoria (quando existir)
-          createdBy: { select: { id: true, email: true, name: true } },
         },
-      }),
-    ]);
+      },
+    }),
+  ]);
 
-    const out = (transactions || []).map((t) => ({
-      id: t.id,
-      type: t.type,
-      amountCents: t.amountCents,
-      occurredAt: t.occurredAt,
-      note: t.note ?? null,
+  const out = (transactions || []).map((t) => ({
+    id: t.id,
+    type: t.type,
+    amountCents: t.amountCents,
+    occurredAt: t.occurredAt,
+    note: t.note ?? null,
 
-      investmentId: t.investmentId ?? null,
-      fromInvestmentId: t.fromInvestmentId ?? null,
-      toInvestmentId: t.toInvestmentId ?? null,
+    investmentId: t.investmentId ?? null,
+    fromInvestmentId: t.fromInvestmentId ?? null,
+    toInvestmentId: t.toInvestmentId ?? null,
 
-      investment: t.investment ?? null,
-      fromInv: t.fromInv ?? null,
-      toInv: t.toInv ?? null,
+    investment: t.investment ?? null,
+    fromInv: t.fromInv ?? null,
+    toInv: t.toInv ?? null,
 
-      createdBy: t.createdBy
-        ? { id: t.createdBy.id, email: t.createdBy.email, name: t.createdBy.name ?? null }
-        : null,
+    createdBy: t.createdBy ? { id: t.createdBy.id, email: t.createdBy.email } : null,
 
-      client: t.portfolio?.client
-        ? {
-            id: t.portfolio.client.id,
-            fullName: t.portfolio.client.fullName,
-            email: t.portfolio.client.user?.email ?? null,
-          }
-        : null,
-    }));
+    client: t.portfolio?.client
+      ? {
+          id: t.portfolio.client.id,
+          fullName: t.portfolio.client.fullName,
+          email: t.portfolio.client.user?.email ?? null,
+        }
+      : null,
+  }));
 
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-
-    return res.json({
-      ok: true,
-      page,
-      limit,
-      total,
-      totalPages,
-      transactions: out,
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || "Erro interno" });
-  }
+  return res.json({
+    ok: true,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    transactions: out,
+  });
 }
 
 module.exports = { listAdminTransactionsGlobal };
