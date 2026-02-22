@@ -7,9 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
-
-
 enum Role {
   ADMIN
   CLIENT
@@ -39,13 +36,12 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  client             Client?
+  client Client?
 
   // ✅ NOVO
-  auditLogs          AuditLog[]
+  auditLogs           AuditLog[]
   createdTransactions Transaction[] @relation("TxCreatedBy")
 }
-
 
 model Client {
   id       String          @id @default(cuid())
@@ -60,58 +56,52 @@ model Client {
 }
 
 model Portfolio {
-  id               String      @id @default(cuid())
-  clientId         String      @unique
+  id       String @id @default(cuid())
+  clientId String @unique
 
   cashInvestmentId String?     @unique
   cashInvestment   Investment? @relation("CashInvestment", fields: [cashInvestmentId], references: [id])
 
-  client           Client      @relation(fields: [clientId], references: [id])
-  investments      Investment[]
-  groups           InvestmentGroup[]
-  transactions     Transaction[]
+  client       Client        @relation(fields: [clientId], references: [id])
+  investments  Investment[]
+  transactions Transaction[]
 }
 
 model InvestmentGroup {
-  id          String @id @default(cuid())
-  portfolioId String
-  name        String
+  id   String @id @default(cuid())
+  name String @unique
 
-  portfolio   Portfolio    @relation(fields: [portfolioId], references: [id])
   investments Investment[]
-
-  @@unique([portfolioId, name])
 }
 
 model Investment {
-  id          String            @id @default(cuid())
+  id          String   @id @default(cuid())
   portfolioId String
   groupId     String?
   name        String
-  isCash      Boolean           @default(false)
-  createdAt   DateTime          @default(now())
+  isCash      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  portfolio   Portfolio         @relation(fields: [portfolioId], references: [id])
-  group       InvestmentGroup?  @relation(fields: [groupId], references: [id])
+  portfolio Portfolio        @relation(fields: [portfolioId], references: [id])
+  group     InvestmentGroup? @relation(fields: [groupId], references: [id])
 
   // 👇 ADICIONE ISSO
-  cashForPortfolio Portfolio?   @relation("CashInvestment")
+  cashForPortfolio Portfolio? @relation("CashInvestment")
 
-  txInvestment Transaction[]    @relation("TxInvestment")
-  txFrom       Transaction[]    @relation("TxFrom")
-  txTo         Transaction[]    @relation("TxTo")
+  txInvestment Transaction[] @relation("TxInvestment")
+  txFrom       Transaction[] @relation("TxFrom")
+  txTo         Transaction[] @relation("TxTo")
 
   @@index([portfolioId])
 }
 
-
 model Transaction {
-  id              String   @id @default(cuid())
-  portfolioId     String
-  type            TxType
-  amountCents     Int
-  occurredAt      DateTime
-  note            String?
+  id          String   @id @default(cuid())
+  portfolioId String
+  type        TxType
+  amountCents Int
+  occurredAt  DateTime
+  note        String?
 
   investmentId     String?
   fromInvestmentId String?
@@ -119,34 +109,32 @@ model Transaction {
 
   // ✅ NOVO (quem lançou)
   createdByUserId String?
-  createdBy       User? @relation("TxCreatedBy", fields: [createdByUserId], references: [id])
+  createdBy       User?   @relation("TxCreatedBy", fields: [createdByUserId], references: [id])
 
-  portfolio       Portfolio @relation(fields: [portfolioId], references: [id])
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
 
-  investment      Investment? @relation("TxInvestment", fields: [investmentId], references: [id])
-  fromInv         Investment? @relation("TxFrom", fields: [fromInvestmentId], references: [id])
-  toInv           Investment? @relation("TxTo", fields: [toInvestmentId], references: [id])
+  investment Investment? @relation("TxInvestment", fields: [investmentId], references: [id])
+  fromInv    Investment? @relation("TxFrom", fields: [fromInvestmentId], references: [id])
+  toInv      Investment? @relation("TxTo", fields: [toInvestmentId], references: [id])
 
   @@index([portfolioId, occurredAt])
 }
 
-
 model AuditLog {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   actorUserId String?
-  actorUser   User?    @relation(fields: [actorUserId], references: [id])
+  actorUser   User?   @relation(fields: [actorUserId], references: [id])
 
-  action      String
-  entityType  String
-  entityId    String?
-  metadata    Json?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
 
-  ip          String?
-  userAgent   String?
+  ip        String?
+  userAgent String?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
 }
-

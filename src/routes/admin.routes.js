@@ -13,6 +13,7 @@ const groupsRoutes = require("./admin.groups.routes");
 const investmentsRoutes = require("./admin.investments.routes");
 const transactionsRoutes = require("./admin.transactions.routes");
 const exportsRoutes = require("./admin.exports.routes");
+const globalGroupsRoutes = require("./admin.groups.global.routes");
 
 router.use(requireAuth, requireAdmin, forceChangePassword);
 router.use("/clients/:clientId/exports", exportsRoutes);
@@ -24,6 +25,7 @@ router.post("/clients", createClient);
 router.get("/clients/:clientId/dashboard", getClientDashboard);
 
 // vertentes, investimentos, transações por cliente
+router.use("/groups", globalGroupsRoutes);
 router.use("/clients/:clientId/groups", groupsRoutes);
 router.use("/clients/:clientId/investments", investmentsRoutes);
 router.use("/clients/:clientId/transactions", transactionsRoutes);

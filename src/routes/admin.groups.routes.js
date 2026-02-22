@@ -1,9 +1,15 @@
-const express = require("express");
-const router = express.Router({ mergeParams: true });
+const router = require("express").Router();
 
-const { createGroup, listGroups } = require("../controller/admin.groups.controller");
+const {
+  listGroups,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+} = require("../controller/admin.groups.controller");
 
 router.get("/", listGroups);
 router.post("/", createGroup);
+router.patch("/:groupId", updateGroup);
+router.delete("/:groupId", deleteGroup);
 
 module.exports = router;

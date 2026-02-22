@@ -27,13 +27,13 @@ async function getPortfolioOrThrow(clientId) {
   return portfolio;
 }
 
-async function ensureGroupBelongsToPortfolio(groupId, portfolioId) {
-  const group = await prisma.investmentGroup.findFirst({
-    where: { id: groupId, portfolioId },
+async function ensureGroupExists(groupId) {
+  const group = await prisma.investmentGroup.findUnique({
+    where: { id: groupId },
     select: { id: true },
   });
   if (!group) {
-    const err = new Error("Vertente (groupId) inválida para este cliente");
+    const err = new Error("Grupo (groupId) inválido");
     err.statusCode = 400;
     throw err;
   }
@@ -57,7 +57,7 @@ async function createInvestment(req, res) {
       return res.status(409).json({ ok: false, message: "CAIXA já existe e não pode ser recriado." });
     }
 
-    if (groupId) await ensureGroupBelongsToPortfolio(groupId, portfolio.id);
+    if (groupId) await ensureGroupExists(groupId);
 
     const investment = await prisma.investment.create({
       data: {

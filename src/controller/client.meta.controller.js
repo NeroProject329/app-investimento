@@ -36,8 +36,18 @@ async function listMyGroups(req, res) {
   const portfolio = await getClientPortfolioId(req.user.id);
   if (!portfolio) return res.status(404).json({ ok: false, message: "Portfolio não encontrado" });
 
+  // pega groupIds usados no portfolio do cliente
+  const used = await prisma.investment.findMany({
+    where: { portfolioId: portfolio.id, groupId: { not: null } },
+    distinct: ["groupId"],
+    select: { groupId: true },
+  });
+
+  const ids = used.map((u) => u.groupId).filter(Boolean);
+  if (ids.length === 0) return res.json({ ok: true, groups: [] });
+
   const groups = await prisma.investmentGroup.findMany({
-    where: { portfolioId: portfolio.id },
+    where: { id: { in: ids } },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
