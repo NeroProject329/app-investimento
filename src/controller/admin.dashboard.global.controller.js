@@ -76,12 +76,17 @@ async function getAdminDashboardGlobal(req, res) {
           cashBRL: 0,
           investedCents: 0,
           investedBRL: 0,
+          totalReturnPct: 0,
+          monthlyReturnPct: 0,
         },
         series: { monthly: [] },
         allocation: { byGroup: [] },
         latestTransactions: [],
         topInvestments: [],
         topClients: [],
+        // compat (root)
+        totalReturnPct: 0,
+        monthlyReturnPct: 0,
       });
     }
 
@@ -207,7 +212,6 @@ async function getAdminDashboardGlobal(req, res) {
       }));
 
     // 5) Série mensal global (via deltas mensais + cumulativo)
-    // total delta mensal (sem transfer)
     const totalDeltaRows = await prisma.$queryRaw(
       Prisma.sql`
         SELECT
@@ -232,7 +236,6 @@ async function getAdminDashboardGlobal(req, res) {
       totalDeltaMap.set(r.month, Number(r.delta || 0));
     }
 
-    // cash delta mensal (direto no cash + transfers in/out)
     let cashDeltaRows = [];
     if (cashIds.length) {
       const cashList = Prisma.join(cashIds);
@@ -266,16 +269,14 @@ async function getAdminDashboardGlobal(req, res) {
       cashDeltaMap.set(r.month, Number(r.delta || 0));
     }
 
-    // define range de meses
     const now = new Date();
     const nowMk = monthKey(now);
 
     const firstTotal = totalDeltaMap.size ? monthKeyFromString([...totalDeltaMap.keys()].sort()[0]) : null;
     const firstCash = cashDeltaMap.size ? monthKeyFromString([...cashDeltaMap.keys()].sort()[0]) : null;
 
-    const firstDate = firstTotal && firstCash
-      ? (firstTotal < firstCash ? firstTotal : firstCash)
-      : (firstTotal || firstCash);
+    const firstDate =
+      firstTotal && firstCash ? (firstTotal < firstCash ? firstTotal : firstCash) : firstTotal || firstCash;
 
     const months = firstDate ? monthRange(firstDate, now) : [nowMk];
 
@@ -294,40 +295,36 @@ async function getAdminDashboardGlobal(req, res) {
       };
     });
 
-
     const monthly = monthlyAll.slice(-monthsWanted);
 
     // ✅ capital aportado global (DEPOSIT - WITHDRAW)
-const contribRows = await prisma.transaction.groupBy({
-  by: ["type"],
-  where: {
-    portfolioId: { in: portfolioIds },
-    type: { in: ["DEPOSIT", "WITHDRAW"] },
-  },
-  _sum: { amountCents: true },
-});
+    const contribRows = await prisma.transaction.groupBy({
+      by: ["type"],
+      where: {
+        portfolioId: { in: portfolioIds },
+        type: { in: ["DEPOSIT", "WITHDRAW"] },
+      },
+      _sum: { amountCents: true },
+    });
 
-let contributedCents = 0;
-for (const row of contribRows) {
-  const amt = row._sum.amountCents || 0;
-  if (row.type === "DEPOSIT") contributedCents += amt;
-  if (row.type === "WITHDRAW") contributedCents -= amt;
-}
+    let contributedCents = 0;
+    for (const row of contribRows) {
+      const amt = row._sum.amountCents || 0;
+      if (row.type === "DEPOSIT") contributedCents += amt;
+      if (row.type === "WITHDRAW") contributedCents -= amt;
+    }
 
-const profitCents = totals.aumCents - contributedCents;
+    const profitCents = totals.aumCents - contributedCents;
 
-const totalReturnPct = contributedCents > 0
-  ? Number(((profitCents / contributedCents) * 100).toFixed(2))
-  : 0;
+    const totalReturnPct =
+      contributedCents > 0 ? Number(((profitCents / contributedCents) * 100).toFixed(2)) : 0;
 
-// mensal: compara AUM atual vs fim do mês anterior
-const prevTotal = monthlyAll.length >= 2 ? (monthlyAll[monthlyAll.length - 2].totalCents || 0) : 0;
-const monthlyReturnPct = prevTotal > 0
-  ? Number((((totals.aumCents - prevTotal) / prevTotal) * 100).toFixed(2))
-  : 0;
+    // mensal: compara AUM atual vs fim do mês anterior
+    const prevTotal = monthlyAll.length >= 2 ? monthlyAll[monthlyAll.length - 2].totalCents || 0 : 0;
+    const monthlyReturnPct =
+      prevTotal > 0 ? Number((((totals.aumCents - prevTotal) / prevTotal) * 100).toFixed(2)) : 0;
 
     // 6) Alocação por grupo (saldo atual)
-    // Vamos calcular saldo por investimento (diretas + transfers) e agregar por group/cash.
     const investments = await prisma.investment.findMany({
       select: {
         id: true,
@@ -339,12 +336,11 @@ const monthlyReturnPct = prevTotal > 0
     });
 
     const invIds = investments.map((i) => i.id);
-    const invMap = new Map(); // id -> meta
+    const invMap = new Map();
     for (const inv of investments) {
       invMap.set(inv.id, inv);
     }
 
-    // direct: DEPOSIT/WITHDRAW/GAIN/LOSS/ADJUST por investmentId
     const direct = invIds.length
       ? await prisma.transaction.groupBy({
           by: ["investmentId", "type"],
@@ -356,7 +352,7 @@ const monthlyReturnPct = prevTotal > 0
         })
       : [];
 
-    const balMap = new Map(); // investmentId -> cents
+    const balMap = new Map();
     for (const invId of invIds) balMap.set(invId, 0);
 
     const addTypes = new Set(["DEPOSIT", "GAIN", "ADJUST"]);
@@ -368,7 +364,6 @@ const monthlyReturnPct = prevTotal > 0
       balMap.set(id, addTypes.has(row.type) ? cur + amt : cur - amt);
     }
 
-    // transfers out
     const outRows = await prisma.transaction.groupBy({
       by: ["fromInvestmentId"],
       where: { type: "TRANSFER", fromInvestmentId: { in: invIds } },
@@ -380,7 +375,6 @@ const monthlyReturnPct = prevTotal > 0
       balMap.set(id, cur - (row._sum.amountCents || 0));
     }
 
-    // transfers in
     const inRows = await prisma.transaction.groupBy({
       by: ["toInvestmentId"],
       where: { type: "TRANSFER", toInvestmentId: { in: invIds } },
@@ -392,11 +386,10 @@ const monthlyReturnPct = prevTotal > 0
       balMap.set(id, cur + (row._sum.amountCents || 0));
     }
 
-    // group allocation
-    const groupMap = new Map(); // groupName -> cents
+    const groupMap = new Map();
     for (const inv of investments) {
       const b = balMap.get(inv.id) || 0;
-      const groupName = inv.isCash ? "CAIXA" : (inv.group?.name || "Sem grupo");
+      const groupName = inv.isCash ? "CAIXA" : inv.group?.name || "Sem grupo";
       groupMap.set(groupName, (groupMap.get(groupName) || 0) + b);
     }
 
@@ -409,14 +402,13 @@ const monthlyReturnPct = prevTotal > 0
       }))
       .sort((a, b) => b.balanceCents - a.balanceCents);
 
-    // 7) Top investments (sem CAIXA), consolidado por (groupName + name)
-    // Precisamos contar quantos clientes possuem aquele ativo.
+    // 7) Top investments (sem CAIXA)
     const portfolioToClient = new Map();
     for (const c of clients) {
       if (c.portfolio?.id) portfolioToClient.set(c.portfolio.id, c.id);
     }
 
-    const topMap = new Map(); // key -> {groupName,name,totalCents,clientsSet}
+    const topMap = new Map();
     for (const inv of investments) {
       if (inv.isCash) continue;
 
@@ -506,12 +498,18 @@ const monthlyReturnPct = prevTotal > 0
         cashBRL: centsToBRL(totals.cashCents),
         investedCents,
         investedBRL: centsToBRL(investedCents),
+
+        // ✅ NOVO: dentro de totals (o front vai ler daqui)
+        totalReturnPct,
+        monthlyReturnPct,
       },
       series: { monthly },
       allocation: { byGroup },
       latestTransactions,
       topInvestments,
       topClients,
+
+      // compat (root): pode manter sem problemas
       totalReturnPct,
       monthlyReturnPct,
     });
